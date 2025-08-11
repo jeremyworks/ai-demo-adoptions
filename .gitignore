@@ -4,6 +4,10 @@ target/
 !**/src/main/**/target/
 !**/src/test/**/target/
 
+### DOCKER ###
+pgdata/*
+!pgdata/.gitkeep
+
 ### STS ###
 .apt_generated
 .classpath

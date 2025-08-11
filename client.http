@@ -1,0 +1,13 @@
+### First request
+POST http://localhost:8080/2/inquire
+Content-Type: application/x-www-form-urlencoded
+
+question=Do you have any dogs named Vindaloo?
+
+###
+
+### Second request
+POST http://localhost:8080/2/inquire
+Content-Type: application/x-www-form-urlencoded
+
+question=fantastic. When can I schedule an appointment to pick up Vindaloo?
