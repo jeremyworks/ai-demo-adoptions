@@ -82,11 +82,11 @@ class ConversationalConfiguration {
                 """;
 
 		builder.defaultSystem(system);
-		if (false) {
+		boolean useLocalTools = true;
+		if (useLocalTools) {
 			builder.defaultTools(localScheduler);
 		} else {
 			builder.defaultToolCallbacks(new SyncMcpToolCallbackProvider(mcpSyncClient));
-
 		}
 		return builder.build();
 	}

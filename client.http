@@ -2,7 +2,7 @@
 POST http://localhost:8080/2/inquire
 Content-Type: application/x-www-form-urlencoded
 
-question=Do you have any dogs named Vindaloo?
+question=Do you have any neurotic dogs?
 
 ###
 
@@ -10,4 +10,4 @@ question=Do you have any dogs named Vindaloo?
 POST http://localhost:8080/2/inquire
 Content-Type: application/x-www-form-urlencoded
 
-question=fantastic. When can I schedule an appointment to pick up Vindaloo?
+question=fantastic. When can I schedule an appointment to pick up?
