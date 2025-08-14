@@ -9,6 +9,7 @@ import org.springframework.ai.chat.client.advisor.PromptChatMemoryAdvisor;
 import org.springframework.ai.chat.client.advisor.vectorstore.QuestionAnswerAdvisor;
 import org.springframework.ai.chat.client.advisor.vectorstore.VectorStoreChatMemoryAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.ai.chat.memory.InMemoryChatMemoryRepository;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.mcp.SyncMcpToolCallbackProvider;
@@ -82,12 +83,13 @@ class ConversationalConfiguration {
                 """;
 
 		builder.defaultSystem(system);
-		boolean useLocalTools = true;
+		boolean useLocalTools = false;
 		if (useLocalTools) {
 			builder.defaultTools(localScheduler);
 		} else {
 			builder.defaultToolCallbacks(new SyncMcpToolCallbackProvider(mcpSyncClient));
 		}
+//		builder.defaultAdvisors(VectorStoreChatMemoryAdvisor.builder(vectorStore).build());
 		return builder.build();
 	}
 }
@@ -124,22 +126,21 @@ class ConversationalController {
 	private final ChatClient chatClient;
 	private final Map<String, PromptChatMemoryAdvisor> advisorsMap = new ConcurrentHashMap<>();
 	private final QuestionAnswerAdvisor questionAnswerAdvisor;
-	private final DogAdoptionScheduler scheduler;
+//	private final DogAdoptionScheduler scheduler;
 	private final ChatMemory chatMemory;
 
-	ConversationalController(DogAdoptionScheduler scheduler, ChatClient chatClient, VectorStore vectorStore, ChatMemory chatMemory) {
+	ConversationalController(ChatClient chatClient, VectorStore vectorStore, ChatMemory chatMemory) {
 		this.chatClient = chatClient;
 		this.questionAnswerAdvisor = new QuestionAnswerAdvisor(vectorStore);
 		this.chatMemory = chatMemory;
-		this.scheduler = scheduler;
+//		this.scheduler = scheduler;
 	}
 
 	@PostMapping("/{user}/inquire")
 	String inquire(@PathVariable("user") String user, @RequestParam String question) {
 
 		var advisor = this.advisorsMap.computeIfAbsent(user, key ->
-				PromptChatMemoryAdvisor.builder(
-						MessageWindowChatMemory.builder().build()).build());
+				PromptChatMemoryAdvisor.builder(chatMemory).build());
 
 		return chatClient
 				.prompt()

@@ -15,3 +15,15 @@ services:
       - ./db/init:/docker-entrypoint-initdb.d:ro
       - ./pgdata:/var/lib/postgresql/data
 
+  mcp-service:
+    image: eclipse-temurin:24-jre-alpine
+    container_name: service-app
+    working_dir: /app
+    volumes:
+      - ./service-0.0.1-SNAPSHOT.jar:/app/app.jar
+    command: sh -c "java ${JAVA_OPTS:-} -jar /app/app.jar"
+    environment:
+      JAVA_OPTS: "-XX:+UseG1GC -XX:MaxRAMPercentage=75"
+    ports:
+      - "8081:8081"
+    restart: unless-stopped

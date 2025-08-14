@@ -1,0 +1,3 @@
+# Access keys for a valid AWS account user AIM
+#spring.ai.bedrock.aws.access-key=
+#spring.ai.bedrock.aws.secret-key=
