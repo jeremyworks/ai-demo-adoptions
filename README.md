@@ -60,9 +60,9 @@ Then Run the second request that makes the appointment through MCP.
 ## Inspiration
 In this Video:
 
-_**Wouldn't it be great if the code they were sprinting through were available?**_
+_**Wouldn't it be great if the code they were racing through were available?**_
 
-_**Wouldn't it be great if the code they were writing actually worked?**_
+_**Wouldn't it be great if the code they were typing actually worked?**_
 ![James-Ward-Josh-Long-Video-Screen.png](docs/images/James-Ward-Josh-Long-Video-Screen.png)
 https://youtu.be/Y291afdLroQ?si=Zf9xmzvE9C_0ZU1V
 
