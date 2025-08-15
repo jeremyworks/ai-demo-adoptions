@@ -1,4 +1,4 @@
-# Adoptions Demo
+# Dog Adoptions Demo
 Demo of Spring AI Agents, AWS Bedrock access with RAG, and MCP tools implementation. 
 See [Inspiration](#inspiration) for the why and where of the adoption demo.
 
