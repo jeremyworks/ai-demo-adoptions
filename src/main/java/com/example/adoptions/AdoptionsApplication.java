@@ -89,7 +89,10 @@ class ConversationalConfiguration {
 		} else {
 			builder.defaultToolCallbacks(new SyncMcpToolCallbackProvider(mcpSyncClient));
 		}
-//		builder.defaultAdvisors(VectorStoreChatMemoryAdvisor.builder(vectorStore).build());
+
+		// The only reason the video demo works without this adviser is that the second
+		// request also mentions "Prancer", otherwise it would have failed to make the appointment.
+		// builder.defaultAdvisors(VectorStoreChatMemoryAdvisor.builder(vectorStore).build());
 		return builder.build();
 	}
 }
