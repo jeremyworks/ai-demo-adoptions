@@ -4,11 +4,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.modelcontextprotocol.client.McpClient;
 import io.modelcontextprotocol.client.McpSyncClient;
 import io.modelcontextprotocol.client.transport.HttpClientSseClientTransport;
+import jakarta.servlet.http.HttpSession;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.client.advisor.PromptChatMemoryAdvisor;
 import org.springframework.ai.chat.client.advisor.vectorstore.QuestionAnswerAdvisor;
-import org.springframework.ai.chat.client.advisor.vectorstore.VectorStoreChatMemoryAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.ai.chat.memory.ChatMemoryRepository;
 import org.springframework.ai.chat.memory.InMemoryChatMemoryRepository;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.document.Document;
@@ -20,6 +22,8 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Scope;
+import org.springframework.context.annotation.ScopedProxyMode;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.repository.ListCrudRepository;
 import org.springframework.stereotype.Component;
@@ -28,17 +32,13 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
+import org.springframework.web.context.WebApplicationContext;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
-import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * @author James Ward
- * @author Josh Long
  */
 @SpringBootApplication
 public class AdoptionsApplication {
@@ -49,6 +49,46 @@ public class AdoptionsApplication {
 
 @Configuration
 class ConversationalConfiguration {
+
+	// Session-scoped ChatMemory (ephemeral, demo). When this is passed to constructors by
+	// Spring it is a proxy that will eventually get a session-based instance when needed.
+	// This holds state and is passed into a singleton ChatClient to provide user context
+	@Bean
+	@Scope(value = WebApplicationContext.SCOPE_SESSION, proxyMode = ScopedProxyMode.TARGET_CLASS)
+	public ChatMemory chatMemory(ChatMemoryRepository repo) {
+		// Simple rolling memory that keeps the last maxMessages
+		return MessageWindowChatMemory.builder()
+				.chatMemoryRepository(repo)
+				.maxMessages(10)
+				.build();
+	}
+
+	// In-memory repository for the messages (per JVM)
+	// A repo needs to be supplied to create a ChatMemory. This is simple in memory one.
+	// This could pull from Redis or a DB, or wherever.
+	@Bean
+	public ChatMemoryRepository chatMemoryRepository() {
+		return new InMemoryChatMemoryRepository();
+	}
+
+	@Bean
+	public MessageChatMemoryAdvisor messageChatMemoryAdvisor(ChatMemory chatMemory) {
+		return MessageChatMemoryAdvisor
+				.builder(chatMemory)
+				.build();
+	}
+
+	// RAG Advisor- A singleton, instance used for every request. Contains no user state.
+	@Bean
+	public QuestionAnswerAdvisor questionAnswerAdvisor(VectorStore vectorStore, DogRepository dogRepository) {
+		dogRepository.findAll().forEach(dog -> {
+			var document = new Document("id: %s, dog name: %s, description: up for adoptions: %s, ".formatted(
+					dog.id(), dog.name(), dog.description())
+			);
+			vectorStore.add(List.of(document));
+		});
+		return new QuestionAnswerAdvisor(vectorStore);
+	}
 
 	@Bean
 	McpSyncClient mcpSyncClient () {
@@ -61,18 +101,11 @@ class ConversationalConfiguration {
 	@Bean
 	ChatClient chatClient(
 			ChatClient.Builder builder,
+			MessageChatMemoryAdvisor memoryAdvisor,
+			QuestionAnswerAdvisor questionAnswerAdvisor,
 			McpSyncClient mcpSyncClient,
-			VectorStore vectorStore,
-			DogRepository dogRepository,
 			DogAdoptionScheduler localScheduler
 	) {
-
-		dogRepository.findAll().forEach(dog -> {
-			var document = new Document("id: %s, dog name: %s, description: up for adoptions: %s, ".formatted(
-					dog.id(), dog.name(), dog.description())
-			);
-			vectorStore.add(List.of(document));
-		});
 
 		var system = """
                 You are an AI powered assistant to help people adopt a dog from the adoption\s
@@ -83,16 +116,14 @@ class ConversationalConfiguration {
                 """;
 
 		builder.defaultSystem(system);
+		builder.defaultAdvisors(memoryAdvisor, questionAnswerAdvisor);
+
 		boolean useLocalTools = false;
 		if (useLocalTools) {
 			builder.defaultTools(localScheduler);
 		} else {
 			builder.defaultToolCallbacks(new SyncMcpToolCallbackProvider(mcpSyncClient));
 		}
-
-		// The only reason the video demo works without this adviser is that the second
-		// request also mentions "Prancer", otherwise it would have failed to make the appointment.
-		// builder.defaultAdvisors(VectorStoreChatMemoryAdvisor.builder(vectorStore).build());
 		return builder.build();
 	}
 }
@@ -125,30 +156,20 @@ class DogAdoptionScheduler {
 @Controller
 @ResponseBody
 class ConversationalController {
-
 	private final ChatClient chatClient;
-	private final Map<String, PromptChatMemoryAdvisor> advisorsMap = new ConcurrentHashMap<>();
-	private final QuestionAnswerAdvisor questionAnswerAdvisor;
-//	private final DogAdoptionScheduler scheduler;
-	private final ChatMemory chatMemory;
 
-	ConversationalController(ChatClient chatClient, VectorStore vectorStore, ChatMemory chatMemory) {
+	ConversationalController(ChatClient chatClient) {
 		this.chatClient = chatClient;
-		this.questionAnswerAdvisor = new QuestionAnswerAdvisor(vectorStore);
-		this.chatMemory = chatMemory;
-//		this.scheduler = scheduler;
 	}
 
 	@PostMapping("/{user}/inquire")
-	String inquire(@PathVariable("user") String user, @RequestParam String question) {
-
-		var advisor = this.advisorsMap.computeIfAbsent(user, key ->
-				PromptChatMemoryAdvisor.builder(chatMemory).build());
-
+	String inquire(@PathVariable("user") String user, @RequestParam String question,  HttpSession session) {
+		String sessionId = session.getId();
+		System.out.println("inquire: " + question + " sessionId: " + sessionId);
 		return chatClient
 				.prompt()
 				.user(question)
-				.advisors(advisor, this.questionAnswerAdvisor)
+				.advisors(a -> a.param(ChatMemory.CONVERSATION_ID, sessionId))
 				.call()
 				.content();
 	}
