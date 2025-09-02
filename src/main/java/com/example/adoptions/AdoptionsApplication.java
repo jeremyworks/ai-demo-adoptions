@@ -7,7 +7,6 @@ import io.modelcontextprotocol.client.transport.HttpClientSseClientTransport;
 import jakarta.servlet.http.HttpSession;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
-import org.springframework.ai.chat.client.advisor.PromptChatMemoryAdvisor;
 import org.springframework.ai.chat.client.advisor.vectorstore.QuestionAnswerAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.ChatMemoryRepository;
@@ -37,6 +36,7 @@ import org.springframework.web.context.WebApplicationContext;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Vector;
 
 /**
  */
@@ -81,12 +81,15 @@ class ConversationalConfiguration {
 	// RAG Advisor- A singleton, instance used for every request. Contains no user state.
 	@Bean
 	public QuestionAnswerAdvisor questionAnswerAdvisor(VectorStore vectorStore, DogRepository dogRepository) {
+		Vector<String> all_dogs = new Vector<>();
 		dogRepository.findAll().forEach(dog -> {
-			var document = new Document("id: %s, dog name: %s, description: up for adoptions: %s, ".formatted(
+			all_dogs.add(dog.name());
+			var document = new Document("Information about available dog: id: %s, dog name: %s, description: up for adoptions: %s, ".formatted(
 					dog.id(), dog.name(), dog.description())
 			);
 			vectorStore.add(List.of(document));
 		});
+		vectorStore.add(List.of(new Document("All known dogs for adoption:" + String.join(", ", all_dogs))));
 		return new QuestionAnswerAdvisor(vectorStore);
 	}
 
@@ -147,7 +150,6 @@ class DogAdoptionScheduler {
 	String scheduleDogAdoptionAppointment (@ToolParam (description = "the id of the dog") int dogId,
 										   @ToolParam (description = "the name of the dog") String dogName) throws Exception
 	{
-		System.out.println("confirming appointment for [" + dogId + "] and [" + dogName + "]");
 		var instant = Instant.now().plus(3, ChronoUnit.DAYS);
 		return objectMapper.writeValueAsString(instant);
 	}
@@ -157,9 +159,11 @@ class DogAdoptionScheduler {
 @ResponseBody
 class ConversationalController {
 	private final ChatClient chatClient;
+	private final ChatMemory chatMemory;
 
-	ConversationalController(ChatClient chatClient) {
+	ConversationalController(ChatClient chatClient, ChatMemory chatMemory) {
 		this.chatClient = chatClient;
+		this.chatMemory = chatMemory;
 	}
 
 	@PostMapping("/{user}/inquire")
@@ -172,5 +176,12 @@ class ConversationalController {
 				.advisors(a -> a.param(ChatMemory.CONVERSATION_ID, sessionId))
 				.call()
 				.content();
+	}
+
+	@PostMapping("/{user}/reset")
+	String reset(HttpSession session) {
+		// Clear the conversation memory for this session
+		chatMemory.clear(session.getId());
+		return "Conversation reset.";
 	}
 }

@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <title>Pooch Palace – Chat</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+        :root { font-family: Inter, system-ui, Arial, sans-serif; }
+        body { margin: 0; background: #f6f7f9; }
+        .wrap { max-width: 880px; margin: 0 auto; padding: 24px; }
+        .card { background: #fff; border-radius: 16px; box-shadow: 0 8px 24px rgba(0,0,0,.06); overflow: hidden; }
+        .header { padding: 16px 20px; border-bottom: 1px solid #eee; display:flex; align-items:center; gap:10px }
+        .dot { width:10px;height:10px;border-radius:50%;background:#10b981 }
+        .title { font-weight: 600; }
+        .chat { height: 60vh; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 12px; }
+        .msg { max-width: 76%; padding: 12px 14px; border-radius: 14px; line-height: 1.4; white-space: pre-wrap; }
+        .you  { align-self: flex-end; background: #2563eb; color: #fff; border-bottom-right-radius: 4px; }
+        .bot  { align-self: flex-start; background: #f1f5f9; color: #111827; border-bottom-left-radius: 4px; }
+        .inputRow { display: grid; grid-template-columns: auto 120px; gap: 10px; padding: 14px; border-top: 1px solid #eee; }
+        textarea { resize: none; height: 60px; padding: 10px 12px; border-radius: 10px; border: 1px solid #d1d5db; font-size: 14px; }
+        button { border: 0; border-radius: 10px; font-weight: 600; background: #111827; color: white; cursor: pointer; }
+        button[disabled] { opacity: .6; cursor: default; }
+        .subtle { color: #6b7280; font-size: 13px; }
+        .row { display:flex; gap:12px; align-items:center; }
+        .tag { background:#eef2ff;color:#3730a3;border-radius:999px;padding:4px 8px;font-size:12px }
+        .topbar { display:flex; justify-content: space-between; align-items:center; }
+        .who { display:flex; gap:8px; align-items:center; }
+        input[type="text"] { padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 8px; width: 180px; }
+    </style>
+</head>
+<body>
+<div class="wrap">
+    <div class="card">
+        <div class="header">
+            <div class="dot"></div>
+            <div class="topbar" style="width:100%">
+                <div class="title">Pooch Palace Assistant</div>
+                <div class="who">
+                    <span class="subtle">User handle:</span>
+                    <input id="userInput" type="text" value="demo-user" />
+                    <span class="tag">Session-aware</span>
+                </div>
+            </div>
+        </div>
+
+        <div id="chat" class="chat">
+            <div class="msg bot">Hi! Ask me about available dogs or book an adoption appointment.</div>
+        </div>
+
+        <div style="padding: 8px 14px; border-top: 1px solid #eee; text-align:right;">
+            <button id="resetBtn" style="background:#ef4444">Reset Chat</button>
+        </div>
+
+        <div class="inputRow">
+            <textarea id="q" placeholder="Type a question… (Shift+Enter for newline)"></textarea>
+            <button id="sendBtn">Send</button>
+        </div>
+    </div>
+
+    <p class="subtle" style="margin-top:10px">
+        Heads-up: this demo posts to <code>/{user}/inquire</code> on the same origin and uses your HTTP session for memory.
+    </p>
+</div>
+
+<script>
+    const chatEl = document.getElementById('chat');
+    const qEl = document.getElementById('q');
+    const userEl = document.getElementById('userInput');
+    const sendBtn = document.getElementById('sendBtn');
+
+    function addMsg(text, who) {
+        const div = document.createElement('div');
+        div.className = 'msg ' + (who === 'you' ? 'you' : 'bot');
+        div.textContent = text;
+        chatEl.appendChild(div);
+        chatEl.scrollTop = chatEl.scrollHeight;
+    }
+
+    async function send() {
+        const question = qEl.value.trim();
+        const user = (userEl.value || 'demo-user').trim();
+        if (!question) return;
+
+        addMsg(question, 'you');
+        qEl.value = '';
+        qEl.disabled = true; sendBtn.disabled = true;
+
+        try {
+            const res = await fetch(`/${encodeURIComponent(user)}/inquire`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+                body: new URLSearchParams({ question })
+            });
+
+            if (!res.ok) {
+                const text = await res.text().catch(()=>'');
+                throw new Error(`HTTP ${res.status} ${res.statusText}${text ? ': '+text : ''}`);
+            }
+
+            const answer = await res.text();
+            addMsg(answer || '(no content)', 'bot');
+        } catch (e) {
+            console.error(e);
+            addMsg('Error: ' + (e.message || e), 'bot');
+        } finally {
+            qEl.disabled = false; sendBtn.disabled = false;
+            qEl.focus();
+        }
+    }
+
+    sendBtn.addEventListener('click', send);
+    qEl.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            send();
+        }
+    });
+
+    const resetBtn = document.getElementById('resetBtn');
+
+    resetBtn.addEventListener('click', async () => {
+        const user = (userEl.value || 'demo-user').trim();
+        try {
+            await fetch(`/${encodeURIComponent(user)}/reset`, { method: 'POST' });
+            chatEl.innerHTML = '<div class="msg bot">Chat reset. Start fresh!</div>';
+        } catch (e) {
+            console.error(e);
+            addMsg('Error resetting chat: ' + (e.message || e), 'bot');
+        }
+    });
+
+</script>
+</body>
+</html>

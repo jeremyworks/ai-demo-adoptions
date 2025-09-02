@@ -57,6 +57,10 @@ Click on the **green arrow** next to the first request and wait for it to respon
 Then Run the second request that makes the appointment through MCP.
 ![IntelliJ-Run-Http-Client-Requests.png](docs/images/IntelliJ-Run-Http-Client-Requests.png)
 
+## Chat Client
+You can also test using the page: http://localhost:8080/chat.html
+
+
 ## Inspiration
 In this Video:
 
